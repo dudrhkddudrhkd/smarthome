@@ -1,0 +1,1663 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Teachable Machine & Web BLE Controller</title>
+  
+  <!-- Pretendard & Outfit Fonts -->
+  <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- p5.js (v1.9.0) & ml5.js (v0.12.2) CDNs -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+  <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
+
+  <style>
+    /* Design System and HSL Dark Theme */
+    :root {
+      --bg-primary: #080710;
+      --bg-gradient: radial-gradient(circle at top left, #1a162b, #080710 80%);
+      --panel-bg: rgba(18, 16, 29, 0.65);
+      --panel-border: rgba(255, 255, 255, 0.08);
+      --panel-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+      --font-family: 'Pretendard', 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      /* Primary / Glowing Colors */
+      --accent-hue: 270;
+      --color-accent: hsl(var(--accent-hue), 85%, 65%);
+      --color-accent-glow: hsla(var(--accent-hue), 85%, 65%, 0.4);
+      --color-success: hsl(142, 70%, 50%);
+      --color-success-bg: hsla(142, 70%, 50%, 0.15);
+      --color-warning: hsl(45, 100%, 50%);
+      --color-warning-bg: hsla(45, 100%, 50%, 0.15);
+      --color-danger: hsl(340, 80%, 55%);
+      --color-danger-bg: hsla(340, 80%, 55%, 0.15);
+
+      --text-primary: #f3f4f6;
+      --text-secondary: #9ca3af;
+      --text-muted: #6b7280;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg-primary);
+      background-image: var(--bg-gradient);
+      color: var(--text-primary);
+      font-family: var(--font-family);
+      min-height: 100vh;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    /* Security Warning Banner */
+    .security-warning {
+      background: var(--color-danger-bg);
+      border: 1px solid var(--color-danger);
+      color: var(--text-primary);
+      padding: 12px 16px;
+      border-radius: 12px;
+      margin: 16px 24px 0 24px;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+    }
+
+    /* Layout structure */
+    .app-container {
+      display: grid;
+      grid-template-columns: 420px 1fr;
+      gap: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+      min-height: 100vh;
+    }
+
+    /* Left sticky side: Camera feed */
+    .camera-section {
+      position: relative;
+    }
+
+    .sticky-card {
+      position: sticky;
+      top: 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+      max-height: calc(100vh - 48px);
+    }
+
+    /* Right scrollable side: Controls */
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    /* Glassmorphism Panel styles */
+    .glass-panel {
+      background: var(--panel-bg);
+      backdrop-filter: blur(16px) saturate(180%);
+      -webkit-backdrop-filter: blur(16px) saturate(180%);
+      border: 1px solid var(--panel-border);
+      border-radius: 16px;
+      box-shadow: var(--panel-shadow);
+      padding: 24px;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .glass-panel:hover {
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+
+    /* Title and Header */
+    .app-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .app-header h1 {
+      font-family: 'Outfit', sans-serif;
+      font-weight: 700;
+      font-size: 24px;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #fff 30%, var(--color-accent));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .badge-container {
+      display: flex;
+      gap: 10px;
+    }
+
+    /* Dynamic Badges with pulsation */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      background: rgba(255, 255, 255, 0.03);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    @keyframes pulse {
+      0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(var(--dot-rgb), 0.7);
+      }
+      70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 6px rgba(var(--dot-rgb), 0);
+      }
+      100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(var(--dot-rgb), 0);
+      }
+    }
+
+    .dot-pulse {
+      animation: pulse 1.8s infinite;
+    }
+
+    .badge-waiting { color: var(--text-secondary); }
+    .badge-scanning { color: var(--color-warning); }
+    .badge-connected { color: var(--color-success); }
+    .badge-loaded { color: var(--color-success); }
+
+    /* Canvas configuration */
+    #canvas-container {
+      width: 100%;
+      max-width: 370px;
+      aspect-ratio: 1 / 1;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid rgba(255, 255, 255, 0.1);
+      background: #000;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+
+    #canvas-container canvas {
+      width: 100% !important;
+      height: 100% !important;
+      display: block;
+    }
+
+    /* Prediction list */
+    .prediction-list {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .prediction-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .pred-info {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      font-weight: 500;
+    }
+
+    .pred-label {
+      color: var(--text-primary);
+    }
+
+    .pred-pct {
+      color: var(--text-secondary);
+    }
+
+    .pred-bar-bg {
+      width: 100%;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+
+    .pred-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--color-accent), #c084fc);
+      border-radius: 3px;
+      width: 0%;
+      transition: width 0.15s ease-out;
+    }
+
+    /* Card structures */
+    .card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 18px;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .card-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 8px;
+    }
+
+    .font-sm {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Form and Buttons */
+    .input-row {
+      display: flex;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: var(--text-primary);
+      padding: 10px 14px;
+      font-family: var(--font-family);
+      font-size: 14px;
+      outline: none;
+      transition: all 0.2s;
+    }
+
+    input[type="text"]:focus {
+      border-color: var(--color-accent);
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: 0 0 0 3px var(--color-accent-glow);
+    }
+
+    .btn {
+      font-family: var(--font-family);
+      font-weight: 600;
+      font-size: 14px;
+      padding: 10px 20px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .btn-primary {
+      background: var(--color-accent);
+      color: #fff;
+      box-shadow: 0 4px 14px var(--color-accent-glow);
+    }
+
+    .btn-primary:hover {
+      background: hsl(var(--accent-hue), 85%, 70%);
+      transform: translateY(-1px);
+    }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-primary);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .btn-accent {
+      background: linear-gradient(135deg, var(--color-accent), #a855f7);
+      color: #fff;
+      box-shadow: 0 4px 20px var(--color-accent-glow);
+    }
+
+    .btn-accent:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 25px var(--color-accent-glow);
+    }
+
+    .btn-danger {
+      background: var(--color-danger-bg);
+      color: var(--color-danger);
+      border: 1px solid var(--color-danger);
+    }
+
+    .btn-danger:hover {
+      background: var(--color-danger);
+      color: #fff;
+    }
+
+    .btn-mini {
+      padding: 6px 12px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      width: 100%;
+    }
+
+    .button-row .btn {
+      flex: 1;
+    }
+
+    .button-row-full {
+      width: 100%;
+      margin-top: 12px;
+    }
+
+    .button-row-full .btn {
+      width: 100%;
+    }
+
+    /* Camera controls select UI */
+    .camera-controls {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .control-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .control-group label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-secondary);
+    }
+
+    select {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: var(--text-primary);
+      padding: 10px 14px;
+      font-family: var(--font-family);
+      font-size: 14px;
+      outline: none;
+      cursor: pointer;
+    }
+
+    select:focus {
+      border-color: var(--color-accent);
+    }
+
+    /* BLE settings grid */
+    .settings-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+
+    .settings-item {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .settings-item label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .checkbox-item {
+      flex-direction: row;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+      padding: 6px 0;
+    }
+
+    .checkbox-item label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 14px;
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--color-accent);
+      cursor: pointer;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--color-accent);
+      height: 6px;
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+      outline: none;
+    }
+
+    /* Mapping rows configuration */
+    #mappingContainer {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .mapping-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 8px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .label-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--color-accent);
+    }
+
+    .mapping-input {
+      width: 120px;
+      padding: 6px 10px !important;
+      font-size: 13px !important;
+      text-align: center;
+    }
+
+    .empty-text {
+      color: var(--text-muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 16px 0;
+    }
+
+    /* Terminal Console logs styling */
+    .console-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .console-box {
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      height: 160px;
+      overflow-y: auto;
+      padding: 12px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      scroll-behavior: smooth;
+    }
+
+    .log-item {
+      white-space: pre-wrap;
+      line-height: 1.4;
+    }
+
+    .log-system { color: #9ca3af; }
+    .log-item.log-tx { color: #d8b4fe; } /* neon purple */
+    .log-item.log-rx { color: #22d3ee; } /* neon blue */
+    .log-item.log-error { color: #fda4af; } /* neon pink */
+
+    /* Collapsible MicroPython guide panel */
+    .python-card {
+      padding: 0 !important;
+      overflow: hidden;
+    }
+
+    .python-header {
+      padding: 20px 24px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.02);
+      transition: background 0.2s;
+    }
+
+    .python-header:hover {
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .python-header h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .toggle-icon {
+      font-size: 12px;
+      color: var(--text-secondary);
+      transition: transform 0.2s;
+    }
+
+    .python-content {
+      display: none;
+      padding: 0 24px 24px 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    .code-wrapper {
+      position: relative;
+      margin-top: 12px;
+    }
+
+    .btn-copy {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      z-index: 10;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .btn-copy:hover {
+      background: rgba(255, 255, 255, 0.15);
+    }
+
+    .btn-copy.btn-success {
+      background: var(--color-success-bg);
+      color: var(--color-success);
+      border-color: var(--color-success);
+    }
+
+    pre {
+      background: rgba(0, 0, 0, 0.5);
+      border-radius: 8px;
+      padding: 16px;
+      overflow-x: auto;
+      max-height: 300px;
+    }
+
+    code {
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      color: #e5e7eb;
+      line-height: 1.5;
+      display: block;
+    }
+
+    /* Video off-screen style to prevent rendering throttling */
+    video {
+      position: absolute !important;
+      top: -9999px !important;
+      left: -9999px !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      z-index: -1000 !important;
+    }
+
+    /* Footer styling */
+    .app-footer {
+      text-align: center;
+      margin-top: 12px;
+      padding: 12px 0;
+    }
+
+    .app-footer p {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* RESPONSIVE CSS OVERRIDES */
+    @media (max-width: 1024px) {
+      .app-container {
+        grid-template-columns: 370px 1fr;
+      }
+    }
+
+    /* Mobile Portrait Layout */
+    @media (max-width: 768px) {
+      .security-warning {
+        margin: 12px 12px 0 12px;
+      }
+
+      .app-container {
+        grid-template-columns: 1fr;
+        padding: 12px;
+        gap: 16px;
+      }
+
+      .camera-section {
+        position: sticky;
+        top: 0;
+        z-index: 100;
+      }
+
+      .sticky-card {
+        position: relative;
+        top: 0;
+        max-height: none;
+        border-radius: 0 0 16px 16px;
+        border-top: none;
+        margin: -12px -12px 0 -12px;
+        padding: 16px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+        background: rgba(14, 13, 23, 0.95); /* extra opacity for overlap blur */
+      }
+
+      #canvas-container {
+        max-width: 320px;
+      }
+    }
+
+    /* Mobile Landscape Layout */
+    @media (max-height: 550px) and (orientation: landscape) {
+      .security-warning {
+        margin: 8px 8px 0 8px;
+      }
+
+      .app-container {
+        grid-template-columns: 45% 52%;
+        gap: 12px;
+        padding: 8px;
+      }
+
+      .camera-section {
+        position: sticky;
+        top: 8px;
+        max-height: calc(100vh - 16px);
+      }
+
+      .sticky-card {
+        position: relative;
+        top: 0;
+        height: 100%;
+        max-height: none;
+        margin: 0;
+        border-radius: 16px;
+        padding: 12px;
+      }
+
+      #canvas-container {
+        max-width: 180px;
+      }
+
+      .app-footer {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Web Bluetooth Security Context Warning -->
+  <div id="secureWarningBanner" class="security-warning" style="display: none;">
+    <strong>⚠️ 보안 경고 (Security Warning):</strong> 
+    Web Bluetooth API는 보안 연결(HTTPS 또는 localhost) 환경에서만 허용됩니다. 현재 보안 연결 상태가 아니므로 BLE 스캔이 작동하지 않을 수 있습니다.
+  </div>
+
+  <div class="app-container">
+    
+    <!-- Left Panel: Sticky Web Camera Feed -->
+    <aside class="camera-section">
+      <div class="glass-panel sticky-card">
+        <h2 style="font-size: 16px; font-weight: 600; width: 100%;">Webcam View</h2>
+        
+        <!-- Center cropped canvas -->
+        <div id="canvas-container"></div>
+        
+        <!-- Top 3 Predictions progress bars -->
+        <div class="prediction-list" id="predictionList">
+          <div class="empty-text">모델을 불러오면 추론 결과 차트가 활성화됩니다.</div>
+        </div>
+        
+        <!-- Webcam feed buttons and device lists -->
+        <div class="camera-controls">
+          <div class="control-group">
+            <label for="cameraSelect">카메라 장치 선택</label>
+            <select id="cameraSelect">
+              <option value="">카메라 로딩 중...</option>
+            </select>
+          </div>
+          <div class="button-row">
+            <button id="toggleMirrorBtn" class="btn btn-secondary btn-mini">좌우 반전 토글</button>
+            <button id="toggleCameraFacingBtn" class="btn btn-secondary btn-mini">카메라 전환</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Right Panel: App configurations and logger -->
+    <main class="panel-section">
+      
+      <!-- Top header and statuses -->
+      <header class="glass-panel app-header">
+        <h1>Gemini Canvas TM & BLE Controller</h1>
+        <div class="badge-container">
+          <div class="status-badge badge-waiting" id="bleStatusBadge">
+            <span class="status-dot dot-inactive"></span>
+            <span class="status-text">연결 대기 중</span>
+          </div>
+          <div class="status-badge badge-waiting" id="modelStatusBadge">
+            <span class="status-dot dot-inactive"></span>
+            <span class="status-text">준비 대기 중</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- 1. Model URL input -->
+      <section class="glass-panel card">
+        <h3>1. 티처블 머신 AI 모델 로드</h3>
+        <div class="input-row">
+          <input type="text" id="modelUrlInput" placeholder="모델 공유 URL 또는 고유 짧은 ID 입력 (예: https://teachablemachine.withgoogle.com/models/xxxxxx/)" />
+          <button id="loadModelBtn" class="btn btn-primary">모델 로드</button>
+        </div>
+        <p class="card-desc">모델 전체 URL이나 6자리 이상 고유 짧은 ID를 입력한 뒤 모델 로드 버튼을 클릭하세요.</p>
+      </section>
+
+      <!-- 2. Web BLE controls -->
+      <section class="glass-panel card">
+        <h3>2. Web Bluetooth 마이크로컨트롤러 (ESP32) 연동</h3>
+        <div class="button-row-full">
+          <button id="connectBleBtn" class="btn btn-accent">ESP32 BLE 연결하기</button>
+          <button id="disconnectBleBtn" class="btn btn-danger" style="display: none;">블루투스 연결 해제</button>
+        </div>
+        
+        <div class="settings-grid">
+          <div class="settings-item">
+            <label for="throttleSlider">
+              데이터 송신 스로틀 주기
+              <span id="throttleVal" style="font-weight: bold; color: var(--color-accent);">300ms</span>
+            </label>
+            <input type="range" id="throttleSlider" min="50" max="2000" step="50" value="300" />
+          </div>
+          <div class="settings-item checkbox-item">
+            <label for="dupCheckToggle">
+              <input type="checkbox" id="dupCheckToggle" checked />
+              동일 데이터 중복 전송 방지
+            </label>
+          </div>
+          <div class="settings-item">
+            <label for="delimiterSelect">데이터 구분자 (Delimiter)</label>
+            <select id="delimiterSelect">
+              <option value="lf" selected>LF (\n)</option>
+              <option value="crlf">CR+LF (\r\n)</option>
+              <option value="none">없음</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. Class value mapper -->
+      <section class="glass-panel card">
+        <h3>3. 클래스별 송신값 매핑</h3>
+        <div id="mappingContainer">
+          <p class="empty-text">로딩된 AI 모델 정보가 없습니다. 먼저 모델을 로드하세요.</p>
+        </div>
+        <p class="card-desc font-sm">사물 인식 시 ESP32로 전송할 고유 문자열(예: '1', 'abc')을 라벨명 우측 입력창에 매핑합니다.</p>
+      </section>
+
+      <!-- 4. Terminal Logger -->
+      <section class="glass-panel card console-card">
+        <h3>통신 모니터 로그 (Terminal Monitor)</h3>
+        <div id="consoleLog" class="console-box">
+          <div class="log-item log-system">[System] 웹 애플리케이션이 로드되었습니다. 로그 기록을 시작합니다.</div>
+        </div>
+        <div style="display:flex; justify-content: flex-end;">
+          <button id="clearConsoleBtn" class="btn btn-secondary btn-mini">로그 비우기</button>
+        </div>
+      </section>
+
+      <!-- 5. MicroPython Guide code block -->
+      <section class="glass-panel card python-card">
+        <div class="python-header" id="pythonHeader">
+          <h3>ESP32 MicroPython 수신부 펌웨어 가이드</h3>
+          <span class="toggle-icon">▼</span>
+        </div>
+        <div class="python-content" id="pythonContent">
+          <p class="card-desc" style="margin-bottom:12px;">ESP32 마이크로컨트롤러에 업로드할 MicroPython 예제 코드입니다. UART BLE 통신 규격으로 문자열을 수신하여 GPIO 14(빨강), 27(초록), 12(파랑)번에 연결된 RGB LED 색상을 제어합니다.</p>
+          <div class="code-wrapper">
+            <button id="copyCodeBtn" class="btn btn-mini btn-copy">코드 복사</button>
+            <pre><code id="micropythonCode"># ESP32 MicroPython Nordic UART BLE Service Firmware
+import bluetooth
+import machine
+import neopixel
+import time
+
+# BLE UART UUIDs (Nordic UART Service)
+_UART_UUID = bluetooth.UUID("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
+_FLAG_WRITE = 0x0008
+_FLAG_NOTIFY = 0x0010
+_UART_TX = (bluetooth.UUID("6e400003-b5a3-f393-e0a9-e50e24dcca9e"), _FLAG_NOTIFY)
+_UART_RX = (bluetooth.UUID("6e400002-b5a3-f393-e0a9-e50e24dcca9e"), _FLAG_WRITE)
+_UART_SERVICE = (_UART_UUID, (_UART_TX, _UART_RX))
+
+class BLESimplePeripheral:
+    def __init__(self, ble, name="ESP_LED"):
+        self._ble = ble
+        self._ble.active(True)
+        self._ble.irq(self._irq)
+        ((self._handle_tx, self._handle_rx),) = self._ble.gatts_register_services((_UART_SERVICE,))
+        self._connections = set()
+        self._write_callback = None
+        self._name = name
+        self._advertise()
+
+    def _irq(self, event, data):
+        if event == 1: # _IRQ_CENTRAL_CONNECT
+            conn_handle, _, _ = data
+            self._connections.add(conn_handle)
+            print("Connected")
+        elif event == 2: # _IRQ_CENTRAL_DISCONNECT
+            conn_handle, _, _ = data
+            self._connections.remove(conn_handle)
+            print("Disconnected")
+            self._advertise()
+        elif event == 3: # _IRQ_GATTS_WRITE
+            conn_handle, value_handle = data
+            if value_handle == self._handle_rx:
+                value = self._ble.gatts_read(self._handle_rx)
+                if self._write_callback:
+                    self._write_callback(value)
+
+    def _advertise(self, interval_us=500000):
+        # Flags (LE General Discoverable Mode, BR/EDR Not Supported)
+        payload = bytearray(b"\x02\x01\x06")
+        
+        # Local Name
+        name_bytes = self._name.encode("utf-8")
+        payload.append(len(name_bytes) + 1)
+        payload.append(0x09)
+        payload.extend(name_bytes)
+        
+        # 128-bit Service UUIDs (Complete List)
+        uuid_bytes = bytes(_UART_UUID)
+        payload.append(len(uuid_bytes) + 1)
+        payload.append(0x07)
+        payload.extend(uuid_bytes)
+        
+        self._ble.gap_advertise(interval_us, adv_data=payload)
+
+    def on_write(self, callback):
+        self._write_callback = callback
+
+# RGB LED Configuration (Common Cathode)
+pin_r = machine.Pin(14, machine.Pin.OUT)
+pin_g = machine.Pin(27, machine.Pin.OUT)
+pin_b = machine.Pin(12, machine.Pin.OUT)
+
+def set_color(r, g, b):
+    # Common Cathode (GND common): 1 turns ON, 0 turns OFF
+    # If using Common Anode (VCC common), invert logic: pin_r.value(0 if r > 0 else 1)
+    pin_r.value(1 if r > 0 else 0)
+    pin_g.value(1 if g > 0 else 0)
+    pin_b.value(1 if b > 0 else 0)
+
+# BLE Data Listener Callback
+def on_rx(data):
+    # Strip whitespace & carriage returns
+    msg = data.decode("utf-8").strip()
+    print("Received Command:", msg)
+    
+    if msg == "1":
+        set_color(255, 0, 0)      # 빨강 (Red)
+    elif msg == "2":
+        set_color(0, 255, 0)      # 초록 (Green)
+    elif msg == "abc":
+        set_color(0, 0, 255)      # 파랑 (Blue)
+    elif msg == "4":
+        set_color(255, 255, 0)    # 노랑 (Yellow)
+    else:
+        set_color(0, 0, 0)        # 소등 (Black)
+
+# Initialize BLE Simple Peripheral
+ble = bluetooth.BLE()
+sp = BLESimplePeripheral(ble)
+sp.on_write(on_rx)
+
+print("ESP32 BLE UART Server is running...")
+</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <footer class="app-footer">
+        <p>AI 모델학습(TM) 제미나이 캔버스 웹 앱 &copy; 2026. All rights reserved.</p>
+      </footer>
+    </main>
+  </div>
+
+  <script>
+    // Security Context check at runtime
+    if (!window.isSecureContext) {
+      document.getElementById('secureWarningBanner').style.display = 'block';
+    }
+
+    // p5.js variables
+    let capture;
+    let classifier;
+    let isModelLoaded = false;
+    let predictions = [];
+    let selectedDeviceId = "";
+    let facingMode = 'user';
+    let isMirrored = true;
+
+    // Web Bluetooth GATT attributes
+    const UART_SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+    const TX_CHARACTERISTIC_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+    const RX_CHARACTERISTIC_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+
+    let bluetoothDevice = null;
+    let txCharacteristic = null;
+    let rxCharacteristic = null;
+    let isBluetoothConnected = false;
+
+    // Control and lock flags for BLE transmissions
+    let isSendingData = false;
+    let lastSentTime = 0;
+    let lastSentValue = null;
+
+    // Default mapping tables for Teachable Machine classes
+    const defaultSeq = ['1', '2', 'abc', '4'];
+    let classMappings = {};
+
+    // -------------------------------------------------------------
+    // p5.js Sketch Handlers
+    // -------------------------------------------------------------
+    function hideVideoElement(val) {
+      if (val) {
+        val.style('position', 'absolute');
+        val.style('top', '-9999px');
+        val.style('left', '-9999px');
+        val.style('opacity', '0');
+        val.style('width', '640px');
+        val.style('height', '480px');
+        val.style('pointer-events', 'none');
+        val.style('z-index', '-1');
+      }
+    }
+
+    function setup() {
+      // Create a 400x400 square canvas inside the parent div
+      let canvas = createCanvas(400, 400);
+      canvas.parent('canvas-container');
+      
+      // Initialize default camera feed
+      let constraints = {
+        video: {
+          facingMode: facingMode
+        },
+        audio: false
+      };
+      
+      capture = createCapture(constraints, function(stream) {
+        logToConsole("기본 웹캠 장치가 성공적으로 시작되었습니다.", "system");
+        initCameraList();
+      });
+      capture.size(640, 480);
+      hideVideoElement(capture);
+
+      // UI initial states
+      updateBLEBadge("waiting", "연결 대기 중");
+      updateModelBadge("waiting", "준비 대기 중");
+    }
+
+    function draw() {
+      // Sleek background dark fill matching the theme
+      background(15, 14, 23);
+      
+      if (capture && capture.loadedmetadata) {
+        push();
+        
+        // Handle horizontal mirror axis flip
+        if (isMirrored) {
+          translate(width, 0);
+          scale(-1, 1);
+        }
+        
+        // 640x480 crop calculations to center-draw in a 400x400 canvas
+        // x-offset = (640 - 400) / 2 = 120
+        // y-offset = (480 - 400) / 2 = 40
+        image(capture, 0, 0, 400, 400, 120, 40, 400, 400);
+        
+        pop();
+        
+        // Draw real-time inference overlay directly onto the canvas bottom
+        if (predictions && predictions.length > 0) {
+          let topPred = predictions[0];
+          let label = topPred.label;
+          let conf = topPred.confidence;
+          
+          // HUD glass bounding box
+          fill(10, 9, 17, 210);
+          noStroke();
+          rect(0, height - 60, width, 60);
+          
+          // Glowing top border accent
+          fill(168, 85, 247);
+          rect(0, height - 60, width, 2);
+          
+          // Top prediction label
+          fill(243, 244, 246);
+          textSize(15);
+          textAlign(LEFT, CENTER);
+          textFont('Pretendard');
+          textStyle(BOLD);
+          text(label, 20, height - 30);
+          
+          // Confidence percentage
+          textAlign(RIGHT, CENTER);
+          textStyle(NORMAL);
+          text(`${(conf * 100).toFixed(1)}%`, width - 20, height - 30);
+        }
+      } else {
+        // Skeleton placeholder state
+        fill(156, 163, 175);
+        textAlign(CENTER, CENTER);
+        textFont('Pretendard');
+        textSize(14);
+        text("웹캠 스트림을 불러오는 중...", width / 2, height / 2);
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Camera Control Handlers
+    // -------------------------------------------------------------
+    async function initCameraList() {
+      try {
+        let devices = await navigator.mediaDevices.enumerateDevices();
+        let videoDevices = devices.filter(d => d.kind === 'videoinput');
+        
+        let select = document.getElementById('cameraSelect');
+        select.innerHTML = '';
+        
+        if (videoDevices.length === 0) {
+          let opt = document.createElement('option');
+          opt.value = "";
+          opt.text = "감지된 카메라가 없습니다.";
+          select.appendChild(opt);
+          return;
+        }
+
+        videoDevices.forEach(device => {
+          let opt = document.createElement('option');
+          opt.value = device.deviceId;
+          opt.text = device.label || `Camera ${select.length + 1}`;
+          select.appendChild(opt);
+        });
+
+        // Set default device
+        selectedDeviceId = videoDevices[0].deviceId;
+        
+        select.addEventListener('change', (e) => {
+          selectedDeviceId = e.target.value;
+          restartCamera(true);
+        });
+      } catch (err) {
+        logToConsole(`카메라 기기 검색 실패: ${err.message}`, "error");
+      }
+    }
+
+    function restartCamera(useDeviceId = true) {
+      if (capture) {
+        let stream = capture.elt.srcObject;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        capture.remove();
+      }
+      
+      let constraints = {
+        audio: false,
+        video: {}
+      };
+      
+      if (useDeviceId && selectedDeviceId) {
+        constraints.video.deviceId = { exact: selectedDeviceId };
+      } else {
+        constraints.video.facingMode = facingMode;
+      }
+      
+      capture = createCapture(constraints, function() {
+        logToConsole(`웹캠을 재시작했습니다. (Mirror: ${isMirrored}, FacingMode: ${facingMode})`, "system");
+      });
+      capture.size(640, 480);
+      hideVideoElement(capture);
+    }
+
+    document.getElementById('toggleMirrorBtn').addEventListener('click', () => {
+      isMirrored = !isMirrored;
+      logToConsole(`거울 모드(좌우 반전): ${isMirrored ? "활성화" : "비활성화"}`, "system");
+    });
+
+    document.getElementById('toggleCameraFacingBtn').addEventListener('click', () => {
+      facingMode = facingMode === 'user' ? 'environment' : 'user';
+      isMirrored = (facingMode === 'user'); // Default mirror for front camera
+      restartCamera(false);
+    });
+
+    // -------------------------------------------------------------
+    // Teachable Machine & Classification Logic
+    // -------------------------------------------------------------
+    function normalizeModelURL(input) {
+      let trimmed = input.trim();
+      if (!trimmed) return "";
+      
+      // Full Teachable Machine URL or general URL
+      if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+        if (!trimmed.endsWith("/")) {
+          trimmed += "/";
+        }
+        return trimmed;
+      }
+      
+      // Otherwise fallback to ID normalization
+      return `https://teachablemachine.withgoogle.com/models/${trimmed}/`;
+    }
+
+    // Custom deep explorer to fetch labels list from the ml5 classifier object
+    function findLabels(obj) {
+      if (!obj) return null;
+      if (Array.isArray(obj.classes)) return obj.classes;
+      if (Array.isArray(obj.labels)) return obj.labels;
+      
+      for (let key in obj) {
+        if (obj.hasOwnProperty(key) && typeof obj[key] === 'object' && obj[key] !== null) {
+          if (key === 'elt' || key === 'canvas' || key === 'video') continue;
+          let found = findLabels(obj[key]);
+          if (found) return found;
+        }
+      }
+      return null;
+    }
+
+    function initMappings(labels) {
+      let stored = localStorage.getItem('tm_class_map');
+      let loadedMap = {};
+      
+      if (stored) {
+        try {
+          loadedMap = JSON.parse(stored);
+        } catch(e) {
+          console.error(e);
+        }
+      }
+      
+      classMappings = {};
+      labels.forEach((label, index) => {
+        if (loadedMap[label] !== undefined) {
+          classMappings[label] = loadedMap[label];
+        } else {
+          // Default mapping matching PRD sequence (1, 2, abc, 4)
+          if (index < defaultSeq.length) {
+            classMappings[label] = defaultSeq[index];
+          } else {
+            classMappings[label] = (index + 1).toString();
+          }
+        }
+      });
+      
+      saveMappings();
+      renderMappingUI(labels);
+    }
+
+    function saveMappings() {
+      localStorage.setItem('tm_class_map', JSON.stringify(classMappings));
+    }
+
+    function renderMappingUI(labels) {
+      let container = document.getElementById('mappingContainer');
+      container.innerHTML = '';
+      
+      if (labels.length === 0) {
+        container.innerHTML = '<p class="empty-text">라벨 정보가 없습니다.</p>';
+        return;
+      }
+      
+      labels.forEach(label => {
+        let row = document.createElement('div');
+        row.className = 'mapping-row';
+        
+        let labelSpan = document.createElement('span');
+        labelSpan.className = 'label-name';
+        labelSpan.innerText = label;
+        
+        let input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'mapping-input';
+        input.value = classMappings[label] || '';
+        input.placeholder = '전송 문자';
+        
+        input.addEventListener('input', (e) => {
+          classMappings[label] = e.target.value.trim();
+          saveMappings();
+        });
+        
+        row.appendChild(labelSpan);
+        row.appendChild(input);
+        container.appendChild(row);
+      });
+    }
+
+    document.getElementById('loadModelBtn').addEventListener('click', () => {
+      let rawUrl = document.getElementById('modelUrlInput').value.trim();
+      if (!rawUrl) {
+        logToConsole("티처블 머신 모델 URL 또는 고유 ID를 입력해주세요.", "error");
+        return;
+      }
+      
+      let modelURL = normalizeModelURL(rawUrl);
+      isModelLoaded = false;
+      predictions = [];
+      
+      logToConsole(`Teachable Machine 모델 다운로드 시작: ${modelURL}`, "system");
+      updateModelBadge("loading", "다운로드 중...");
+      
+      try {
+        // Load TM model
+        classifier = ml5.imageClassifier(modelURL + 'model.json', () => {
+          logToConsole("모델이 성공적으로 로드되었습니다.", "system");
+          updateModelBadge("loaded", "정상 로드 완료");
+          
+          let labels = findLabels(classifier) || [];
+          logToConsole(`파싱된 라벨 리스트: ${labels.join(', ')}`, "system");
+          
+          initMappings(labels);
+          isModelLoaded = true;
+          classifyVideo();
+        });
+      } catch (err) {
+        logToConsole(`모델 로드 실패: ${err.message}`, "error");
+        updateModelBadge("waiting", "로드 실패");
+      }
+    });
+
+    function classifyVideo() {
+      if (classifier && capture && capture.elt && isModelLoaded) {
+        try {
+          classifier.classify(capture.elt, gotResult);
+        } catch (e) {
+          logToConsole(`추론 시작 실패: ${e.message}`, "error");
+          setTimeout(classifyVideo, 250);
+        }
+      } else {
+        setTimeout(classifyVideo, 250);
+      }
+    }
+
+    function gotResult(error, results) {
+      if (error) {
+        logToConsole(`추론 에러: ${error.message || error}`, "error");
+        setTimeout(classifyVideo, 250);
+        return;
+      }
+      
+      if (!results || !Array.isArray(results) || results.length === 0) {
+        setTimeout(classifyVideo, 100);
+        return;
+      }
+      
+      predictions = results;
+      updatePredictionUI(results);
+      
+      if (results[0]) {
+        handlePredictionTX(results[0]);
+      }
+      
+      classifyVideo();
+    }
+
+    function updatePredictionUI(results) {
+      let list = document.getElementById('predictionList');
+      if (!list) return;
+      
+      list.innerHTML = '';
+      
+      let top3 = results.slice(0, 3);
+      top3.forEach(pred => {
+        let item = document.createElement('div');
+        item.className = 'prediction-item';
+        
+        let info = document.createElement('div');
+        info.className = 'pred-info';
+        
+        let label = document.createElement('span');
+        label.className = 'pred-label';
+        label.innerText = pred.label;
+        
+        let pct = document.createElement('span');
+        pct.className = 'pred-pct';
+        pct.innerText = `${(pred.confidence * 100).toFixed(0)}%`;
+        
+        info.appendChild(label);
+        info.appendChild(pct);
+        
+        let bg = document.createElement('div');
+        bg.className = 'pred-bar-bg';
+        
+        let fill = document.createElement('div');
+        fill.className = 'pred-bar-fill';
+        fill.style.width = `${(pred.confidence * 100).toFixed(0)}%`;
+        
+        bg.appendChild(fill);
+        item.appendChild(info);
+        item.appendChild(bg);
+        list.appendChild(item);
+      });
+    }
+
+    // -------------------------------------------------------------
+    // Bluetooth UART Controller
+    // -------------------------------------------------------------
+    async function connectBLE() {
+      if (!navigator.bluetooth) {
+        logToConsole("이 브라우저에서 Web Bluetooth API를 지원하지 않거나 설정되어 있지 않습니다.", "error");
+        return;
+      }
+      
+      try {
+        logToConsole("주변 ESP_ 장치 검색 중...", "system");
+        updateBLEBadge("scanning", "연결 스캔 중");
+        
+        bluetoothDevice = await navigator.bluetooth.requestDevice({
+          filters: [
+            {
+              services: [UART_SERVICE_UUID],
+              namePrefix: 'ESP_'
+            }
+          ],
+          optionalServices: [UART_SERVICE_UUID]
+        });
+        
+        logToConsole(`GATT 서버 연결 시도: ${bluetoothDevice.name}`, "system");
+        bluetoothDevice.addEventListener('gattserverdisconnected', onDisconnected);
+        
+        const server = await bluetoothDevice.gatt.connect();
+        logToConsole("GATT 서버 연결 완료. Nordic UART 서비스 탐색...", "system");
+        
+        const service = await server.getPrimaryService(UART_SERVICE_UUID);
+        logToConsole("UART 서비스를 성공적으로 가져왔습니다.", "system");
+        
+        txCharacteristic = await service.getCharacteristic(TX_CHARACTERISTIC_UUID);
+        logToConsole("송신 채널(TX Write)을 성공적으로 획득했습니다.", "system");
+        
+        rxCharacteristic = await service.getCharacteristic(RX_CHARACTERISTIC_UUID);
+        logToConsole("수신 채널(RX Notify)을 성공적으로 획득했습니다.", "system");
+        
+        // Listen to notifications coming from ESP32
+        await rxCharacteristic.startNotifications();
+        rxCharacteristic.addEventListener('characteristicvaluechanged', handleRXNotification);
+        logToConsole("수신 데이터 알림(Notification) 감지를 개시합니다.", "system");
+        
+        isBluetoothConnected = true;
+        updateBLEStatusUI();
+      } catch (error) {
+        logToConsole(`블루투스 연결 중 오류 발생: ${error.message}`, "error");
+        resetBLE();
+      }
+    }
+
+    function handleRXNotification(event) {
+      let value = event.target.value;
+      let decoder = new TextDecoder('utf-8');
+      let text = decoder.decode(value);
+      logToConsole(`RX 수신: ${text}`, "rx");
+    }
+
+    function disconnectBLE() {
+      if (bluetoothDevice && bluetoothDevice.gatt.connected) {
+        bluetoothDevice.gatt.disconnect();
+      }
+      logToConsole("블루투스 연결을 해제했습니다.", "system");
+      resetBLE();
+    }
+
+    function onDisconnected() {
+      logToConsole("블루투스 장치와 원격 연결이 끊어졌습니다.", "system");
+      resetBLE();
+    }
+
+    function resetBLE() {
+      bluetoothDevice = null;
+      txCharacteristic = null;
+      rxCharacteristic = null;
+      isBluetoothConnected = false;
+      updateBLEStatusUI();
+    }
+
+    function updateBLEStatusUI() {
+      let connBtn = document.getElementById('connectBleBtn');
+      let discBtn = document.getElementById('disconnectBleBtn');
+      
+      if (isBluetoothConnected) {
+        updateBLEBadge("connected", "연결됨");
+        connBtn.style.display = 'none';
+        discBtn.style.display = 'block';
+      } else {
+        updateBLEBadge("waiting", "연결 대기 중");
+        connBtn.style.display = 'block';
+        discBtn.style.display = 'none';
+      }
+    }
+
+    // -------------------------------------------------------------
+    // Data Transmission with filters (throttling, duplication, delimiters)
+    // -------------------------------------------------------------
+    async function handlePredictionTX(topPrediction) {
+      if (!isBluetoothConnected || !txCharacteristic) return;
+      
+      let label = topPrediction.label;
+      let mappedValue = classMappings[label];
+      
+      if (mappedValue !== undefined && mappedValue !== "") {
+        await sendData(mappedValue);
+      }
+    }
+
+    async function sendData(dataStr) {
+      // 1. Throttle check
+      let throttleMs = parseInt(document.getElementById('throttleSlider').value) || 300;
+      let now = Date.now();
+      if (now - lastSentTime < throttleMs) {
+        return; // Drop packet
+      }
+      
+      // 2. Duplication check
+      let skipDuplicate = document.getElementById('dupCheckToggle').checked;
+      if (skipDuplicate && dataStr === lastSentValue) {
+        return; // Skip duplicate
+      }
+      
+      // 3. Thread-safe sending lock
+      if (isSendingData) {
+        return;
+      }
+      
+      isSendingData = true;
+      
+      try {
+        // Appending Delimiter
+        let delimiter = document.getElementById('delimiterSelect').value;
+        let finalStr = dataStr;
+        if (delimiter === 'lf') {
+          finalStr += '\n';
+        } else if (delimiter === 'crlf') {
+          finalStr += '\r\n';
+        }
+        
+        let encoder = new TextEncoder();
+        let buffer = encoder.encode(finalStr);
+        
+        // Web BLE write value without response
+        await txCharacteristic.writeValueWithoutResponse(buffer);
+        
+        lastSentTime = now;
+        lastSentValue = dataStr;
+        
+        logToConsole(`TX 전송: "${dataStr}" (구분자 포함: ${JSON.stringify(finalStr)})`, "tx");
+      } catch (err) {
+        logToConsole(`송신 에러: ${err.message}`, "error");
+      } finally {
+        isSendingData = false;
+      }
+    }
+
+    // -------------------------------------------------------------
+    // UI Auxiliary Handlers (Console, Sliders, Guides)
+    // -------------------------------------------------------------
+    function updateBLEBadge(state, text) {
+      let badge = document.getElementById('bleStatusBadge');
+      let dot = badge.querySelector('.status-dot');
+      let txt = badge.querySelector('.status-text');
+      
+      txt.innerText = text;
+      dot.className = 'status-dot';
+      
+      if (state === 'waiting') {
+        badge.className = 'status-badge badge-waiting';
+        dot.style.setProperty('--dot-rgb', '219, 39, 119');
+        dot.style.backgroundColor = 'var(--color-danger)';
+      } else if (state === 'scanning') {
+        badge.className = 'status-badge badge-scanning';
+        dot.className = 'status-dot dot-pulse';
+        dot.style.setProperty('--dot-rgb', '245, 158, 11');
+        dot.style.backgroundColor = 'var(--color-warning)';
+      } else if (state === 'connected') {
+        badge.className = 'status-badge badge-connected';
+        dot.style.setProperty('--dot-rgb', '34, 197, 94');
+        dot.style.backgroundColor = 'var(--color-success)';
+      }
+    }
+
+    function updateModelBadge(state, text) {
+      let badge = document.getElementById('modelStatusBadge');
+      let dot = badge.querySelector('.status-dot');
+      let txt = badge.querySelector('.status-text');
+      
+      txt.innerText = text;
+      dot.className = 'status-dot';
+      
+      if (state === 'waiting') {
+        badge.className = 'status-badge badge-waiting';
+        dot.style.setProperty('--dot-rgb', '107, 114, 128');
+        dot.style.backgroundColor = 'var(--text-muted)';
+      } else if (state === 'loading') {
+        badge.className = 'status-badge badge-loading';
+        dot.className = 'status-dot dot-pulse';
+        dot.style.setProperty('--dot-rgb', '245, 158, 11');
+        dot.style.backgroundColor = 'var(--color-warning)';
+      } else if (state === 'loaded') {
+        badge.className = 'status-badge badge-loaded';
+        dot.style.setProperty('--dot-rgb', '34, 197, 94');
+        dot.style.backgroundColor = 'var(--color-success)';
+      }
+    }
+
+    function logToConsole(message, type = "system") {
+      let box = document.getElementById('consoleLog');
+      if (!box) return;
+      
+      let item = document.createElement('div');
+      item.className = `log-item log-${type}`;
+      
+      let now = new Date();
+      let timeStr = now.toTimeString().split(' ')[0];
+      
+      let prefix = "[SYS]";
+      if (type === "tx") prefix = "[TX ]";
+      else if (type === "rx") prefix = "[RX ]";
+      else if (type === "error") prefix = "[ERR]";
+      
+      item.innerText = `[${timeStr}] ${prefix} ${message}`;
+      box.appendChild(item);
+      box.scrollTop = box.scrollHeight;
+      
+      while (box.children.length > 80) {
+        box.removeChild(box.firstChild);
+      }
+    }
+
+    // Dynamic throttle range print
+    document.getElementById('throttleSlider').addEventListener('input', (e) => {
+      document.getElementById('throttleVal').innerText = `${e.target.value}ms`;
+    });
+
+    // Console clear
+    document.getElementById('clearConsoleBtn').addEventListener('click', () => {
+      document.getElementById('consoleLog').innerHTML = '';
+      logToConsole("로그를 비웠습니다.", "system");
+    });
+
+    // MicroPython Guide collapsible toggle
+    document.getElementById('pythonHeader').addEventListener('click', () => {
+      let pyContent = document.getElementById('pythonContent');
+      let icon = document.querySelector('.toggle-icon');
+      
+      if (pyContent.style.display === 'block') {
+        pyContent.style.display = 'none';
+        icon.style.transform = 'rotate(0deg)';
+      } else {
+        pyContent.style.display = 'block';
+        icon.style.transform = 'rotate(180deg)';
+      }
+    });
+
+    // Code copy clip utility
+    document.getElementById('copyCodeBtn').addEventListener('click', async () => {
+      let code = document.getElementById('micropythonCode').innerText;
+      let btn = document.getElementById('copyCodeBtn');
+      try {
+        await navigator.clipboard.writeText(code);
+        btn.innerText = '복사 완료!';
+        btn.classList.add('btn-success');
+        
+        setTimeout(() => {
+          btn.innerText = '코드 복사';
+          btn.classList.remove('btn-success');
+        }, 2000);
+      } catch (err) {
+        logToConsole(`클립보드 복사 실패: ${err.message}`, "error");
+      }
+    });
+
+    // Connect and disconnect triggers
+    document.getElementById('connectBleBtn').addEventListener('click', connectBLE);
+    document.getElementById('disconnectBleBtn').addEventListener('click', disconnectBLE);
+
+  </script>
+</body>
+</html>
